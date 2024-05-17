@@ -2,7 +2,22 @@
 ;; about the language level of this file in a form that our tools can easily process.
 #reader(lib "htdp-intermediate-lambda-reader.ss" "lang")((modname sudoku) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #f #t none #f () #t)))
 #|
-Sudoku puzzle! By Nora (noramkl) :)
+
+sudoku app by nora (noramkl) 
+
+what it can do (so far):
+- convert list representation of sudoku board to graphics
+  - dimensions based around small selection of measurements; easily scaled
+- users able to click on box & type in or a delete a number
+- all numbers on the board turn red once an incorrect number is inputted
+  - with each input, the program checks for if a solution to this board exists
+
+what i still want to implement (for now):
+- a backlog of sudoku puzzles organized by difficulty rating
+- user ability to choose a level of difficulty and receive a random puzzle
+- maximum number of incorrect inputs before they must restart/quit puzzle
+- option to show the solution after failing a puzzle
+
 |#
 
 (require spd/tags)
