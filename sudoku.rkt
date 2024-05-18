@@ -8,15 +8,25 @@ sudoku app by nora (noramkl)
 what it can do (so far):
 - convert list representation of sudoku board to graphics
   - dimensions based around small selection of measurements; easily scaled
+  - able to place board off center
 - users able to click on box & type in or a delete a number
 - all numbers on the board turn red once an incorrect number is inputted
   - with each input, the program checks for if a solution to this board exists
+- a "show solution" button, replaced with an "incorrect input" button when the
+  board is currently unsolveable
+  - ideally, id want to be able to show solution even with a currently incorrect
+    board, but as it stands, the program does not store solutions for boards;
+    it finds the solution to the board everytime an input is added
+
+in-progress features (+ currrent issues):
+- ability to produce solution board when "show solution" button is pressed
+  - currently fails to produce board program also runs incredibly slow since
+    adding that functionality--must redesign (code marked by !!!)
 
 what i still want to implement (for now):
+- maximum number of incorrect inputs before they must restart/quit puzzle
 - a backlog of sudoku puzzles organized by difficulty rating
 - user ability to choose a level of difficulty and receive a random puzzle
-- maximum number of incorrect inputs before they must restart/quit puzzle
-- option to show the solution after failing a puzzle
 
 |#
 
@@ -25,15 +35,48 @@ what i still want to implement (for now):
 (require 2htdp/universe)
 (require racket/list)
 
+
 ;; ========= CONSTANTS
 
-(define BG-LENGTH 700)
+(define BG-LENGTH 800)
 
 (define BD-LENGTH 600)
+(define X-FRM-CTR 0) ;positive value = board skewed right
+(define Y-FRM-CTR (/ (- BG-LENGTH BD-LENGTH) -6)) ;positive value = skewed down
+
 (define C-OUTLINE 1.5)
 (define U-OUTLINE (* 2.5 C-OUTLINE))
 
-;---DO NOT ALTER THE CONSTANTS BELOW, just change the dimensions at the top---
+;;---BE CAUTIOUS ABOUT ALTERING THE DIMENSIONS BELOW---
+;;---they are made to scale with the constants above---
+
+;; solution box dimensions
+(define SOL-HEIGHT (/ (- (/ (- BG-LENGTH BD-LENGTH) 2) Y-FRM-CTR) 2.5))
+(define SOL-WIDTH (* SOL-HEIGHT 5))
+(define S-OUTLINE (/ SOL-HEIGHT 17))
+
+(define SOL-BOX
+  (overlay (text "Click to show solution" (round (/ SOL-WIDTH 11)) "black")
+           (rectangle (- SOL-WIDTH S-OUTLINE) (- SOL-HEIGHT S-OUTLINE)
+                      "solid" "white")
+           (rectangle SOL-WIDTH SOL-HEIGHT "solid" "black")))
+
+(define INC-BOX
+  (overlay (text "Incorrect input" (round (/ SOL-WIDTH 11)) "red")
+           (rectangle (- SOL-WIDTH S-OUTLINE) (- SOL-HEIGHT S-OUTLINE)
+                      "solid" "white")
+           (rectangle SOL-WIDTH SOL-HEIGHT "solid" "black")))
+
+(define INC-SOL-BOX
+  (overlay (text "Fix input to see solution" (round (/ SOL-WIDTH 11)) "red")
+           (rectangle (- SOL-WIDTH S-OUTLINE) (- SOL-HEIGHT S-OUTLINE)
+                      "solid" "white")
+           (rectangle SOL-WIDTH SOL-HEIGHT "solid" "black")))
+
+(define SOL-X (+ (/ BG-LENGTH 2) X-FRM-CTR))
+(define SOL-Y (- BG-LENGTH (/ (- (/ (- BG-LENGTH BD-LENGTH) 2) Y-FRM-CTR) 2)))
+
+;; board dimensions
 (define C-LENGTH (/ (- BD-LENGTH (+ (* C-OUTLINE 6) (* U-OUTLINE 4))) 9))
 (define FONT (round (* 0.65 C-LENGTH)))
 
@@ -50,19 +93,17 @@ what i still want to implement (for now):
 (define HUGAP (rectangle 1 U-OUTLINE "solid" "black"))
 
 (define MTS
-  (overlay (above HUGAP
-                  (beside WUGAP UNIT WUGAP UNIT WUGAP UNIT WUGAP)
-                  HUGAP
-                  (beside WUGAP UNIT WUGAP UNIT WUGAP UNIT WUGAP)
-                  HUGAP
-                  (beside WUGAP UNIT WUGAP UNIT WUGAP UNIT WUGAP)
-                  HUGAP)
-           (square BD-LENGTH "solid" "black")
-           (empty-scene BG-LENGTH BG-LENGTH)))
-
-(define START (+ (/ (- BG-LENGTH BD-LENGTH) 2) U-OUTLINE (/ C-LENGTH 2)))
-(define START-BD (+ (/ (- BG-LENGTH BD-LENGTH) 2) U-OUTLINE))
-;---DO NOT ALTER THE CONSTANTS ABOVE, just change the dimensions at the top---
+  (place-image (overlay (above HUGAP
+                               (beside WUGAP UNIT WUGAP UNIT WUGAP UNIT WUGAP)
+                               HUGAP
+                               (beside WUGAP UNIT WUGAP UNIT WUGAP UNIT WUGAP)
+                               HUGAP
+                               (beside WUGAP UNIT WUGAP UNIT WUGAP UNIT WUGAP)
+                               HUGAP)
+                        (square BD-LENGTH "solid" "black"))
+               (+ (/ BG-LENGTH 2) X-FRM-CTR)
+               (+ (/ BG-LENGTH 2) Y-FRM-CTR)
+               (empty-scene BG-LENGTH BG-LENGTH)))
 
 
 ;; ========= DATA DEFINITIONS
@@ -220,30 +261,42 @@ what i still want to implement (for now):
 (@template-origin MouseEvent)
 
 (define (select-pos bd x y me)
-  (local [(define (get-group n)
-            (cond [(or (< n START-BD) (> n (- BG-LENGTH START-BD))) false]
-                  [(<= n (+ START-BD C-LENGTH C-OUTLINE)) 0]
-                  [(<= n (+ START-BD (* C-LENGTH 2)
-                            (* C-OUTLINE 2))) 1]
-                  [(<= n (+ START-BD (* C-LENGTH 3)
-                            (* C-OUTLINE 2) U-OUTLINE)) 2]
-                  [(<= n (+ START-BD (* C-LENGTH 4)
-                            (* C-OUTLINE 3) U-OUTLINE)) 3]
-                  [(<= n (+ START-BD (* C-LENGTH 5)
-                            (* C-OUTLINE 4) U-OUTLINE)) 4]
-                  [(<= n (+ START-BD (* C-LENGTH 6)
-                            (* C-OUTLINE 4) (* U-OUTLINE 2))) 5]
-                  [(<= n (+ START-BD (* C-LENGTH 7)
-                            (* C-OUTLINE 5) (* U-OUTLINE 2))) 6]
-                  [(<= n (+ START-BD (* C-LENGTH 8)
-                            (* C-OUTLINE 6) (* U-OUTLINE 2))) 7]
-                  [else 8]))
-          (define col (get-group x))
-          (define row (get-group y))]
+  (local [(define (get-group n skew)
+            (local [(define start (+ (+ (/ (- BG-LENGTH BD-LENGTH) 2) U-OUTLINE)
+                                     skew))]
+              (cond [(or (< n start)
+                         (> n (- BG-LENGTH (- start skew skew)))) false]
+                    [(<= n (+ start C-LENGTH C-OUTLINE)) 0]
+                    [(<= n (+ start (* C-LENGTH 2)
+                              (* C-OUTLINE 2))) 1]
+                    [(<= n (+ start (* C-LENGTH 3)
+                              (* C-OUTLINE 2) U-OUTLINE)) 2]
+                    [(<= n (+ start (* C-LENGTH 4)
+                              (* C-OUTLINE 3) U-OUTLINE)) 3]
+                    [(<= n (+ start (* C-LENGTH 5)
+                              (* C-OUTLINE 4) U-OUTLINE)) 4]
+                    [(<= n (+ start (* C-LENGTH 6)
+                              (* C-OUTLINE 4) (* U-OUTLINE 2))) 5]
+                    [(<= n (+ start (* C-LENGTH 7)
+                              (* C-OUTLINE 5) (* U-OUTLINE 2))) 6]
+                    [(<= n (+ start (* C-LENGTH 8)
+                              (* C-OUTLINE 6) (* U-OUTLINE 2))) 7]
+                    [else 8])))
+          (define col (get-group x X-FRM-CTR))
+          (define row (get-group y Y-FRM-CTR))]
     (cond [(and (mouse=? me "button-down")
                 (not (false? col))
                 (not (false? row)))
            (make-board (board-vals bd) (+ (* row 9) col))]
+          [(and (mouse=? me "button-down") ;; !!! SHOW SOLUTION PROBLEM AREA
+                (and (> x (- SOL-X (/ SOL-WIDTH 2)))
+                     (< x (+ SOL-X (/ SOL-WIDTH 2))))
+                (and (> y (- SOL-Y (/ SOL-HEIGHT 2)))
+                     (< y (+ SOL-Y (/ SOL-HEIGHT 2)))))
+           (local [(define try (solve-bd bd))]
+             (if (not (false? try))
+                 try
+                 bd))]
           [else bd])))
 
 
@@ -424,7 +477,7 @@ what i still want to implement (for now):
                 (build-list 9 (λ (n) (make-board (append pre
                                                          (list (add1 n))
                                                          post)
-                                                  (board-select bd0))))
+                                                 (board-select bd0))))
                 (next-bds (append pre (list p)) (first post) (rest post))))]
     (next-bds empty (first (board-vals bd0)) (rest (board-vals bd0)))))
 
@@ -446,22 +499,25 @@ what i still want to implement (for now):
 (@htdf render-bd)
 (@signature Board -> Image)
 ;; renders the image of the sudoku board
-(check-expect (render-bd BD0) MTS)
+(check-expect (render-bd BD0) (place-image SOL-BOX SOL-X SOL-Y MTS))
 
 (@template-origin genrec accumulator use-abstract-fn)
 
 (define (render-bd bd0)
   ;; n is Natural
   ;; INVARIANT: the position on the board of the value being dealt with
-  (local [(define txt-col (if (false? (solve-bd bd0))
-                              "red"
-                              "black"))
+  (local [(define start
+            (+ (/ (- BG-LENGTH BD-LENGTH) 2) U-OUTLINE (/ C-LENGTH 2)))
           
           (define (render-bd bd n)
             (cond [(= n 81) (foldr (λ (i rnr) (place-image (first i)
                                                            (second i)
                                                            (third i)
-                                                           rnr)) MTS bd)]
+                                                           rnr))
+                                   (place-image (if (false? (solve-bd bd0))
+                                                    INC-BOX
+                                                    SOL-BOX)
+                                                SOL-X SOL-Y MTS) bd)]
                   [else
                    (local [(define row (quotient n 9))
                            (define col (remainder n 9))]
@@ -471,17 +527,22 @@ what i still want to implement (for now):
                                                          ""
                                                          (number->string
                                                           (first bd)))
-                                                     FONT txt-col)
-                                               (+ START (* col C-LENGTH)
+                                                     FONT (if (false?
+                                                               (solve-bd bd0))
+                                                              "red"
+                                                              "black"))
+                                               (+ start (* col C-LENGTH)
                                                   (* (- col (quotient col 3))
                                                      C-OUTLINE)
                                                   (* (quotient col 3)
-                                                     U-OUTLINE))
-                                               (+ START (* row C-LENGTH)
+                                                     U-OUTLINE)
+                                                  X-FRM-CTR)
+                                               (+ start (* row C-LENGTH)
                                                   (* (- row (quotient row 3))
                                                      C-OUTLINE)
                                                   (* (quotient row 3)
-                                                     U-OUTLINE)))))
+                                                     U-OUTLINE)
+                                                  Y-FRM-CTR))))
                                 (add1 n)))]))]
     
     (render-bd (board-vals bd0) 0)))
