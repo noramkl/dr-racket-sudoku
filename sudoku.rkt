@@ -288,7 +288,7 @@ what i still want to implement (for now):
                 (not (false? col))
                 (not (false? row)))
            (make-board (board-vals bd) (+ (* row 9) col))]
-          [(and (mouse=? me "button-down") ;; !!! SHOW SOLUTION PROBLEM AREA
+          #;[(and (mouse=? me "button-down") ;; !!! SHOW SOLUTION PROBLEM AREA
                 (and (> x (- SOL-X (/ SOL-WIDTH 2)))
                      (< x (+ SOL-X (/ SOL-WIDTH 2))))
                 (and (> y (- SOL-Y (/ SOL-HEIGHT 2)))
